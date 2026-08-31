@@ -1,0 +1,114 @@
+services:
+  # Multi Hosting Backend API & Control Plane Engine
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: multihosting_backend
+    restart: unless-stopped
+    ports:
+      - "${PORT:-5000}:5000"
+    environment:
+      - NODE_ENV=production
+      - PORT=5000
+      - HOST=0.0.0.0
+      - SERVER_IP=${SERVER_IP:-127.0.0.1}
+      - JWT_SECRET=${JWT_SECRET:-multi_hosting_super_secret_jwt_key_32bytes_min!}
+      - JWT_EXPIRES_IN=7d
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-multi_hosting_aes_256_encryption_key_32_bytes!}
+      - DATA_DIR=/app/data
+      - HOST_DATA_DIR=${HOST_DATA_DIR:-${PWD}/data}
+      - HOST_RUNTIMES_DIR=${HOST_RUNTIMES_DIR:-${PWD}/runtimes}
+      - DOCKER_SOCKET=/var/run/docker.sock
+      - MANAGED_POSTGRES_HOST=postgres-managed
+      - MANAGED_POSTGRES_PORT=5432
+      - MANAGED_POSTGRES_ADMIN_USER=postgres
+      - MANAGED_POSTGRES_ADMIN_PASSWORD=${POSTGRES_ADMIN_PASSWORD:-postgres_admin_pass_multi_hosting}
+      - MANAGED_MYSQL_HOST=mariadb-managed
+      - MANAGED_MYSQL_PORT=3306
+      - MANAGED_MYSQL_ADMIN_USER=root
+      - MANAGED_MYSQL_ADMIN_PASSWORD=${MYSQL_ADMIN_PASSWORD:-mysql_admin_pass_multi_hosting}
+      - PORT_RANGE_START=16000
+      - PORT_RANGE_END=20000
+      - DEFAULT_ADMIN_EMAIL=${DEFAULT_ADMIN_EMAIL:-admin@multihosting.local}
+      - DEFAULT_ADMIN_USERNAME=${DEFAULT_ADMIN_USERNAME:-admin}
+      - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD:-AdminPass123!Secure}
+    volumes:
+      - ./data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock:rw
+      - ./sample-templates:/app/sample-templates:ro
+      - ./runtimes:/app/runtimes:ro
+    depends_on:
+      - postgres-managed
+      - mariadb-managed
+    networks:
+      - multihosting_net
+
+  # Multi Hosting Frontend SPA
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: multihosting_frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      - backend
+    networks:
+      - multihosting_net
+
+  # Managed PostgreSQL Engine for provisioned user databases
+  postgres-managed:
+    image: postgres:15-alpine
+    container_name: multihosting_managed_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:-postgres_admin_pass_multi_hosting}
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - multihosting_net
+
+  # Managed MariaDB / MySQL Engine for provisioned user databases
+  mariadb-managed:
+    image: mariadb:11.8
+    container_name: multihosting_managed_mariadb
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MYSQL_ADMIN_PASSWORD:-mysql_admin_pass_multi_hosting}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    networks:
+      - multihosting_net
+
+  # phpMyAdmin Web Database Interface
+  phpmyadmin:
+    image: phpmyadmin:5.2-apache
+    container_name: multihosting_phpmyadmin
+    restart: unless-stopped
+    ports:
+      - "${PHPMYADMIN_PORT:-8080}:80"
+    environment:
+      - PMA_HOST=mariadb-managed
+      - PMA_PORT=3306
+      - PMA_ARBITRARY=1
+      - UPLOAD_LIMIT=500M
+    depends_on:
+      - mariadb-managed
+    networks:
+      - multihosting_net
+
+volumes:
+  postgres_data:
+  mariadb_data:
+
+networks:
+  multihosting_net:
+    driver: bridge

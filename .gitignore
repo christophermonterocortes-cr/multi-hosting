@@ -1,0 +1,46 @@
+# Dependency directories
+node_modules/
+dist/
+build/
+.cache/
+
+# Environment files
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+
+# SQLite and database data
+data/
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite-journal
+*.db
+
+# Uploaded and project hosting content
+data/projects/
+data/backups/
+data/tmp/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS and Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Certificates and keys
+*.pem
+*.key
+*.crt
+*.cert

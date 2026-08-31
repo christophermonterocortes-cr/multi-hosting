@@ -1,0 +1,131 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg-rack: #101216;
+    --panel-rack: #181b22;
+    --border-rack: #2a303c;
+    --signal-amber: #ffaa00;
+  }
+
+  body {
+    background-color: #101216;
+    color: #e6edf3;
+    font-family: 'IBM Plex Mono', monospace;
+    letter-spacing: -0.01em;
+  }
+
+  h1, h2, h3, h4, .font-display {
+    font-family: 'Chakra Petch', sans-serif;
+    letter-spacing: -0.02em;
+  }
+
+  /* Accessible High-Contrast Keyboard Focus */
+  *:focus-visible {
+    outline: 2px solid #ffaa00 !important;
+    outline-offset: 2px !important;
+  }
+
+  /* Custom Industrial Scrollbars */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #101216;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #2a303c;
+    border-radius: 0px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #ffaa00;
+  }
+}
+
+@layer utilities {
+  /* Rack Blade Frame */
+  .rack-blade {
+    background-color: #181b22;
+    border: 1px solid #2a303c;
+    position: relative;
+  }
+
+  .rack-blade:hover {
+    border-color: #3b4354;
+  }
+
+  .rack-blade-active {
+    border-color: #ffaa00;
+    box-shadow: inset 2px 0 0 #ffaa00;
+  }
+
+  /* Stamped Technical Header */
+  .stamped-header {
+    font-family: 'Chakra Petch', sans-serif;
+    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+  }
+
+  /* Mechanical Push Button */
+  .btn-rack {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 6px 12px;
+    border: 1px solid #2a303c;
+    background-color: #21262d;
+    color: #e6edf3;
+    transition: background-color 0.1s ease, border-color 0.1s ease;
+  }
+
+  .btn-rack:hover {
+    background-color: #272f3d;
+    border-color: #ffaa00;
+    color: #ffffff;
+  }
+
+  .btn-rack-primary {
+    background-color: #ffaa00;
+    color: #101216;
+    border: 1px solid #ffaa00;
+    font-weight: 800;
+  }
+
+  .btn-rack-primary:hover {
+    background-color: #ffbe33;
+    border-color: #ffbe33;
+    color: #000000;
+  }
+
+  .btn-rack-danger {
+    background-color: rgba(224, 49, 49, 0.15);
+    color: #ff6b6b;
+    border: 1px solid #e03131;
+  }
+
+  .btn-rack-danger:hover {
+    background-color: #e03131;
+    color: #ffffff;
+  }
+
+  /* Physical Status Filament Indicator */
+  .filament-amber {
+    box-shadow: 0 0 8px rgba(255, 170, 0, 0.6);
+  }
+}
+
+/* Strict Reduced Motion Override */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

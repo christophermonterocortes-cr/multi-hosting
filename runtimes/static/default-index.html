@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Website Provisioned - Multi Hosting</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        body { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: #f8fafc; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1.5rem; }
+        .card { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 1rem; padding: 2.5rem; max-width: 540px; width: 100%; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); text-align: center; }
+        .badge { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0.75rem; border-radius: 9999px; background: rgba(14, 165, 233, 0.15); color: #38bdf8; font-size: 0.875rem; font-weight: 600; margin-bottom: 1.25rem; }
+        .badge-dot { width: 8px; height: 8px; border-radius: 50%; background: #38bdf8; }
+        h1 { font-size: 1.875rem; font-weight: 700; margin-bottom: 0.75rem; color: #ffffff; }
+        p { color: #94a3b8; line-height: 1.6; margin-bottom: 1.5rem; }
+        .info-box { background: #0f172a; border-radius: 0.5rem; padding: 1rem; text-align: left; font-size: 0.875rem; color: #cbd5e1; border: 1px solid #334155; margin-bottom: 1.5rem; }
+        .info-row { display: flex; justify-content: space-between; padding: 0.25rem 0; }
+        .info-label { color: #64748b; }
+        .footer { font-size: 0.75rem; color: #64748b; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="badge">
+            <span class="badge-dot"></span>
+            Static Runtime Active
+        </div>
+        <h1>Welcome to Your Website!</h1>
+        <p>This static website was successfully provisioned on Multi Hosting. You can now upload your HTML, CSS, JavaScript, and asset files using the File Manager in your dashboard.</p>
+        <div class="info-box">
+            <div class="info-row"><span class="info-label">Web Server:</span> <span>Nginx Alpine (HTTP/1.1)</span></div>
+            <div class="info-row"><span class="info-label">Status:</span> <span style="color: #4ade80;">Active & Serving</span></div>
+            <div class="info-row"><span class="info-label">Storage Path:</span> <code>/var/www/html</code></div>
+        </div>
+        <div class="footer">
+            Powered by Multi Hosting Cloud Platform
+        </div>
+    </div>
+</body>
+</html>

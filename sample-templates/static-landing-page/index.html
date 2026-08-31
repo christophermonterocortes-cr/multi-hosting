@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modern Static App - Multi Hosting</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header class="header">
+        <div class="logo">⚡ Multi Hosting Site</div>
+        <nav>
+            <a href="#features">Features</a>
+            <a href="#stats">Stats</a>
+            <button id="cta-btn" class="btn">Click Me</button>
+        </nav>
+    </header>
+    <main class="hero">
+        <h1>Fast, Reliable Static Hosting</h1>
+        <p>This project is served directly via an isolated, high-performance Nginx Alpine container.</p>
+        <div id="counter-box" class="interactive-box">
+            <p>Interactive Counter: <span id="counter">0</span></p>
+            <button id="inc-btn" class="btn-sm">Increment</button>
+            <button id="rst-btn" class="btn-sm btn-outline">Reset</button>
+        </div>
+    </main>
+    <section id="features" class="grid">
+        <div class="card">
+            <h3>⚡ Lightning Fast</h3>
+            <p>Direct static file caching, gzip compression, and sub-millisecond response times.</p>
+        </div>
+        <div class="card">
+            <h3>🔒 Isolated Security</h3>
+            <p>Sandboxed container per project with non-root execution and security headers.</p>
+        </div>
+        <div class="card">
+            <h3>🌐 Dedicated Port</h3>
+            <p>Assigned a guaranteed unique external port on the Multi Hosting platform.</p>
+        </div>
+    </section>
+    <script src="app.js"></script>
+</body>
+</html>
