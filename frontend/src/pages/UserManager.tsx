@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, Shield, UserCheck, UserX, Trash2, RefreshCw, X, Server } from 'lucide-react';
+import { Users, Plus, Shield, UserCheck, UserX, Trash2, RefreshCw, X, Key, Check } from 'lucide-react';
 import { api } from '../services/api';
 import { User } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -15,6 +15,14 @@ export const UserManager: React.FC = () => {
   const [newRole, setNewRole] = useState<'ADMIN' | 'USER'>('USER');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Password reset modal state
+  const [resetTargetUser, setResetTargetUser] = useState<User | null>(null);
+  const [resetPasswordVal, setResetPasswordVal] = useState('');
+  const [resetting, setResetting] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [resetSuccess, setResetSuccess] = useState<string | null>(null);
+
   const { user: currentUser } = useAuth();
   const { t } = useLanguage();
 
@@ -97,6 +105,33 @@ export const UserManager: React.FC = () => {
     }
   };
 
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetTargetUser) return;
+    if (resetPasswordVal.length < 8) {
+      setResetError('New passkey must be at least 8 characters long.');
+      return;
+    }
+
+    setResetting(true);
+    setResetError(null);
+    try {
+      await api.put(`/users/${resetTargetUser.id}/password`, {
+        password: resetPasswordVal
+      });
+      setResetSuccess(`Passkey updated successfully for user ${resetTargetUser.username}.`);
+      setResetPasswordVal('');
+      setTimeout(() => {
+        setResetTargetUser(null);
+        setResetSuccess(null);
+      }, 2000);
+    } catch (err: any) {
+      setResetError(err.response?.data?.error || err.message || 'Failed to reset passkey.');
+    } finally {
+      setResetting(false);
+    }
+  };
+
   return (
     <div className="space-y-5 font-mono text-xs select-none">
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-rack-border pb-3">
@@ -105,7 +140,7 @@ export const UserManager: React.FC = () => {
             [ TENANT ACCESS CONTROL ]
           </h1>
           <p className="text-trace-dim text-xs mt-0.5">
-            ROLE-BASED AUTHORIZATION AND ISOLATED WORKSPACE ASSIGNMENTS
+            ROLE-BASED AUTHORIZATION, PASSKEY RE-ENCRYPTION, AND WORKSPACE ASSIGNMENTS
           </p>
         </div>
 
@@ -201,16 +236,32 @@ export const UserManager: React.FC = () => {
                       {new Date(u.createdAt).toLocaleDateString()}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      {u.id !== currentUser?.id && (
+                      <div className="flex items-center justify-end gap-1.5">
                         <button
-                          onClick={() => handleDeleteUser(u)}
-                          className="btn-rack btn-rack-danger p-1"
-                          title="Delete User"
-                          aria-label="Delete User"
+                          onClick={() => {
+                            setResetTargetUser(u);
+                            setResetPasswordVal('');
+                            setResetError(null);
+                            setResetSuccess(null);
+                          }}
+                          className="btn-rack text-signal-amber py-1 px-2 text-[10px] flex items-center gap-1"
+                          title="Rekey Passkey"
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
+                          <Key className="h-3 w-3" />
+                          <span>REKEY</span>
                         </button>
-                      )}
+
+                        {u.id !== currentUser?.id && (
+                          <button
+                            onClick={() => handleDeleteUser(u)}
+                            className="btn-rack btn-rack-danger p-1"
+                            title="Delete User"
+                            aria-label="Delete User"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -219,6 +270,82 @@ export const UserManager: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {/* Rekey / Change Passkey Modal */}
+      {resetTargetUser && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/85 p-4 pt-10 sm:pt-14 backdrop-blur-sm select-none font-mono text-xs">
+          <div className="relative w-full max-w-md border-2 border-signal-amber bg-rack-panel shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between border-b border-rack-border px-5 py-3.5 bg-rack-bg">
+              <div className="flex items-center gap-2">
+                <div className="h-3 w-3 bg-signal-amber filament-amber"></div>
+                <div>
+                  <h2 className="font-display font-black text-sm text-trace-silver uppercase tracking-wider">
+                    [ REKEY OPERATOR PASSKEY ]
+                  </h2>
+                  <p className="text-[10px] text-trace-dim">
+                    TENANT: <strong className="text-signal-amber">{resetTargetUser.username}</strong> ({resetTargetUser.email})
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setResetTargetUser(null)}
+                className="p-1 border border-rack-border text-trace-dim hover:text-trace-silver"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {resetSuccess && (
+              <div className="m-4 border border-signal-amber bg-signal-amber/10 p-2.5 text-signal-amber font-bold text-xs flex items-center gap-1.5">
+                <Check className="h-4 w-4" />
+                <span>{resetSuccess}</span>
+              </div>
+            )}
+
+            {resetError && (
+              <div className="m-4 border border-breaker-red bg-breaker-red/10 p-2.5 text-breaker-red font-bold text-xs">
+                FAULT: {resetError}
+              </div>
+            )}
+
+            <form onSubmit={handleResetPassword} className="p-5 space-y-3.5">
+              <div>
+                <label className="block text-[11px] font-bold text-trace-silver uppercase mb-1">
+                  New Master Passkey (Min 8 Characters)
+                </label>
+                <input
+                  type="password"
+                  required
+                  minLength={8}
+                  value={resetPasswordVal}
+                  onChange={(e) => setResetPasswordVal(e.target.value)}
+                  placeholder="Enter new passkey for tenant"
+                  className="w-full border border-rack-border bg-rack-bg px-3 py-2 text-xs text-trace-silver focus:border-signal-amber focus:outline-none"
+                  autoFocus
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-rack-border">
+                <button
+                  type="button"
+                  onClick={() => setResetTargetUser(null)}
+                  className="btn-rack"
+                >
+                  CANCEL
+                </button>
+                <button
+                  type="submit"
+                  disabled={resetting}
+                  className="btn-rack btn-rack-primary flex items-center gap-1"
+                >
+                  <Key className="h-3.5 w-3.5" />
+                  <span>{resetting ? 'REKEYING...' : 'COMMIT PASSKEY RESET'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Create User Modal */}
       {showCreateModal && (

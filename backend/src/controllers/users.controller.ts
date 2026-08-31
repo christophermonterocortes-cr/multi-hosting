@@ -123,4 +123,16 @@ export class UsersController {
       res.status(400).json({ error: err.message });
     }
   }
+
+  public static async resetPassword(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const id = String(req.params.id);
+      const { password } = z.object({ password: z.string().min(8, 'Password must be at least 8 characters long') }).parse(req.body);
+
+      await AuthService.adminResetPassword(req.user!.userId, req.user!.username, id, password);
+      res.json({ message: 'User password reset successfully' });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  }
 }

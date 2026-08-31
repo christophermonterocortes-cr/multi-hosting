@@ -46,6 +46,7 @@ app.get('/api/health', (req, res) => {
 // Authentication Routes
 app.post('/api/auth/register', authLimiter, AuthController.register);
 app.post('/api/auth/login', authLimiter, AuthController.login);
+app.post('/api/auth/change-password', authenticate, AuthController.changePassword);
 app.get('/api/auth/me', authenticate, AuthController.getMe);
 
 // Project Management Routes
@@ -85,6 +86,7 @@ app.post('/api/ports/reconcile', authenticate, requireAdmin, PortsController.rec
 app.get('/api/users', authenticate, requireAdmin, UsersController.list);
 app.post('/api/users', authenticate, requireAdmin, UsersController.create);
 app.put('/api/users/:id', authenticate, requireAdmin, UsersController.update);
+app.put('/api/users/:id/password', authenticate, requireAdmin, UsersController.resetPassword);
 app.delete('/api/users/:id', authenticate, requireAdmin, UsersController.delete);
 
 // System Health & Settings

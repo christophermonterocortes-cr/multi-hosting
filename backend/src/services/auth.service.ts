@@ -182,6 +182,63 @@ export class AuthService {
   }
 
   /**
+   * Change current user's password
+   */
+  public static async changePassword(userId: string, currentPassword: string, newPassword: string, ipAddress?: string): Promise<void> {
+    if (newPassword.length < 8) {
+      throw new Error('New password must be at least 8 characters long.');
+    }
+
+    const userRow = db.prepare('SELECT id, username, password_hash FROM users WHERE id = ?').get(userId) as any;
+    if (!userRow) {
+      throw new Error('User not found.');
+    }
+
+    const match = await bcrypt.compare(currentPassword, userRow.password_hash);
+    if (!match) {
+      throw new Error('Current password is incorrect.');
+    }
+
+    const newHash = await bcrypt.hash(newPassword, 12);
+    db.prepare('UPDATE users SET password_hash = ?, updated_at = datetime(\'now\') WHERE id = ?').run(newHash, userId);
+
+    AuditService.log({
+      userId: userRow.id,
+      username: userRow.username,
+      action: 'AUTH_PASSWORD_CHANGED',
+      resourceType: 'USER',
+      resourceId: userId,
+      ipAddress
+    });
+  }
+
+  /**
+   * Admin resets a user's password
+   */
+  public static async adminResetPassword(adminUserId: string, adminUsername: string, targetUserId: string, newPassword: string): Promise<void> {
+    if (newPassword.length < 8) {
+      throw new Error('New password must be at least 8 characters long.');
+    }
+
+    const targetUser = db.prepare('SELECT id, username FROM users WHERE id = ?').get(targetUserId) as any;
+    if (!targetUser) {
+      throw new Error('Target user not found.');
+    }
+
+    const newHash = await bcrypt.hash(newPassword, 12);
+    db.prepare('UPDATE users SET password_hash = ?, failed_login_attempts = 0, locked_until = NULL, updated_at = datetime(\'now\') WHERE id = ?').run(newHash, targetUserId);
+
+    AuditService.log({
+      userId: adminUserId,
+      username: adminUsername,
+      action: 'ADMIN_RESET_USER_PASSWORD',
+      resourceType: 'USER',
+      resourceId: targetUserId,
+      details: { targetUsername: targetUser.username }
+    });
+  }
+
+  /**
    * Generate JWT Token
    */
   public static generateToken(user: AuthUser): string {

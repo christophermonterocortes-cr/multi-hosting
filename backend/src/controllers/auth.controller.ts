@@ -15,6 +15,11 @@ const loginSchema = z.object({
   password: z.string().min(1)
 });
 
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, 'Current password is required'),
+  newPassword: z.string().min(8, 'New password must be at least 8 characters long')
+});
+
 export class AuthController {
   public static async register(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
@@ -36,6 +41,21 @@ export class AuthController {
       res.json({ message: 'Login successful', ...result });
     } catch (err: any) {
       res.status(401).json({ error: err.message });
+    }
+  }
+
+  public static async changePassword(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      if (!req.user) {
+        res.status(401).json({ error: 'Unauthorized' });
+        return;
+      }
+      const { currentPassword, newPassword } = changePasswordSchema.parse(req.body);
+      const ip = req.ip || req.socket.remoteAddress;
+      await AuthService.changePassword(req.user.userId, currentPassword, newPassword, ip);
+      res.json({ message: 'Password changed successfully' });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
     }
   }
 
