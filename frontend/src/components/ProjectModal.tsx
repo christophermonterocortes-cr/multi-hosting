@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { X, Server, Database, Check } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Server, Database, Check, Globe, AlertCircle } from 'lucide-react';
 import { api } from '../services/api';
 import { Project } from '../types';
 import { useLanguage } from '../context/LanguageContext';
@@ -13,6 +13,10 @@ interface ProjectModalProps {
 export const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSuccess }) => {
   const { t } = useLanguage();
   const [name, setName] = useState('');
+  const [slug, setSlug] = useState('');
+  const [isCustomSlug, setIsCustomSlug] = useState(false);
+  const [slugStatus, setSlugStatus] = useState<{ checking: boolean; available: boolean; message?: string } | null>(null);
+
   const [runtimeType, setRuntimeType] = useState<'STATIC' | 'PHP'>('STATIC');
   const [template, setTemplate] = useState('');
   const [createDatabase, setCreateDatabase] = useState(false);
@@ -20,6 +24,38 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onS
   const [documentRoot, setDocumentRoot] = useState('/');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Auto-generate slug from name if not custom
+  useEffect(() => {
+    if (!isCustomSlug && name) {
+      const generated = name.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').substring(0, 30);
+      setSlug(generated);
+    }
+  }, [name, isCustomSlug]);
+
+  // Debounced check of slug availability
+  useEffect(() => {
+    if (!slug || slug.length < 2) {
+      setSlugStatus(null);
+      return;
+    }
+
+    setSlugStatus({ checking: true, available: false });
+    const timer = setTimeout(async () => {
+      try {
+        const res = await api.get('/projects/check-slug', { params: { slug } });
+        if (res.data.available) {
+          setSlugStatus({ checking: false, available: true, message: `https://${slug}.multi-hosting.com is available` });
+        } else {
+          setSlugStatus({ checking: false, available: false, message: res.data.reason || 'Subdomain already in use' });
+        }
+      } catch (err: any) {
+        setSlugStatus({ checking: false, available: false, message: err.response?.data?.error || 'Validation error' });
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [slug]);
 
   if (!isOpen) return null;
 
@@ -30,12 +66,18 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onS
       return;
     }
 
+    if (slugStatus && !slugStatus.available && !slugStatus.checking) {
+      setError(slugStatus.message || 'Subdomain is unavailable');
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
     try {
       const res = await api.post('/projects', {
         name: name.trim(),
+        slug: slug.trim() || undefined,
         runtimeType,
         template: template || undefined,
         createDatabase,
@@ -69,7 +111,7 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onS
                 [ PROVISION CONTAINER UNIT ]
               </h2>
               <p className="text-[10px] text-trace-dim font-mono">
-                ALLOCATES ISOLATED WORKSPACE + DYNAMIC PORT
+                ALLOCATES ISOLATED WORKSPACE + DYNAMIC SUBDOMAIN + PORT
               </p>
             </div>
           </div>
@@ -104,9 +146,57 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onS
                 onChange={(e) => setName(e.target.value)}
                 className="w-full border border-rack-border bg-rack-bg px-3 py-2 text-trace-silver placeholder-trace-subtle font-mono text-xs focus:border-signal-amber focus:outline-none"
               />
-              <span className="text-[10px] text-trace-dim mt-0.5 block">
-                Alphanumeric slug will be generated automatically.
-              </span>
+            </div>
+
+            {/* Subdomain / Slug Customization with Real-time Check */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-[11px] font-bold text-trace-silver uppercase tracking-wider">
+                  Internet Subdomain Slug *
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setIsCustomSlug(!isCustomSlug)}
+                  className="text-[10px] text-signal-amber hover:underline"
+                >
+                  [{isCustomSlug ? 'AUTO-SYNC WITH NAME' : 'CUSTOMIZE SLUG'}]
+                </button>
+              </div>
+
+              <div className="flex items-center border border-rack-border bg-rack-bg px-3 py-1.5 focus-within:border-signal-amber">
+                <span className="text-trace-dim text-xs select-none">https://</span>
+                <input
+                  type="text"
+                  required
+                  placeholder="app-slug"
+                  value={slug}
+                  onChange={(e) => {
+                    setIsCustomSlug(true);
+                    setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''));
+                  }}
+                  className="w-full bg-transparent px-1 text-signal-amber font-bold font-mono text-xs focus:outline-none"
+                />
+                <span className="text-trace-dim text-xs select-none">.multi-hosting.com</span>
+              </div>
+
+              {/* Real-time Subdomain Availability Status */}
+              {slugStatus && (
+                <div className="mt-1 text-[10px] flex items-center gap-1.5">
+                  {slugStatus.checking ? (
+                    <span className="text-trace-dim">Checking availability...</span>
+                  ) : slugStatus.available ? (
+                    <span className="text-signal-amber font-bold flex items-center gap-1">
+                      <Check className="h-3 w-3" />
+                      <span>{slugStatus.message}</span>
+                    </span>
+                  ) : (
+                    <span className="text-breaker-red font-bold flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      <span>{slugStatus.message}</span>
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Runtime Environment Selector */}
@@ -242,7 +332,7 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onS
             </button>
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || Boolean(slugStatus && !slugStatus.available && !slugStatus.checking)}
               className="btn-rack btn-rack-primary flex items-center gap-1.5"
             >
               <Server className="h-3.5 w-3.5" />

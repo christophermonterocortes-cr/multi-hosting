@@ -11,6 +11,7 @@ import { globalLimiter, authLimiter } from './middleware/rateLimit.middleware';
 import { authenticate, requireAdmin } from './middleware/auth.middleware';
 import { errorHandler } from './middleware/error.middleware';
 
+import { VHostService } from './services/vhost.service';
 import { AuthController } from './controllers/auth.controller';
 import { ProjectsController } from './controllers/projects.controller';
 import { FilesController, uploadMiddleware, uploadSingleZipMiddleware } from './controllers/files.controller';
@@ -23,6 +24,10 @@ import { AuditController } from './controllers/audit.controller';
 const app = express();
 
 app.set('trust proxy', 1);
+
+// Dynamic Subdomain / VHost Proxy Routing for *.multi-hosting.com and custom domains
+// Placed before body-parser so streaming and raw bodies to hosted containers are uninterrupted
+app.use(VHostService.handle);
 
 // Security Headers & Middlewares
 app.use(helmet({
@@ -50,6 +55,7 @@ app.post('/api/auth/change-password', authenticate, AuthController.changePasswor
 app.get('/api/auth/me', authenticate, AuthController.getMe);
 
 // Project Management Routes
+app.get('/api/projects/check-slug', authenticate, ProjectsController.checkSlug);
 app.get('/api/projects', authenticate, ProjectsController.list);
 app.post('/api/projects', authenticate, ProjectsController.create);
 app.get('/api/projects/:id', authenticate, ProjectsController.getById);

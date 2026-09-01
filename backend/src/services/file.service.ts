@@ -234,6 +234,39 @@ export class FileService {
   }
 
   /**
+   * Delete the entire project directory tree
+   */
+  public static async deleteProjectDirectory(projectId: string): Promise<void> {
+    const root = path.resolve(config.projectsDir, projectId);
+    if (fs.existsSync(root)) {
+      await fs.promises.rm(root, { recursive: true, force: true });
+    }
+  }
+
+  /**
+   * Synchronously or asynchronously calculate directory size
+   */
+  public static getDirectorySize(dirPath: string): number {
+    let total = 0;
+    if (!fs.existsSync(dirPath)) return 0;
+    try {
+      const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = path.join(dirPath, entry.name);
+        if (entry.isDirectory()) {
+          total += this.getDirectorySize(fullPath);
+        } else {
+          try {
+            const stat = fs.statSync(fullPath);
+            total += stat.size;
+          } catch {}
+        }
+      }
+    } catch {}
+    return total;
+  }
+
+  /**
    * Calculate total disk usage of project files
    */
   public static async getStorageUsage(projectId: string): Promise<number> {

@@ -9,9 +9,67 @@ import { DockerService } from '../services/docker.service';
 import { FileService } from '../services/file.service';
 import { DatabaseService } from '../services/database.service';
 import { AuditService } from '../services/audit.service';
+import { CloudflareService } from '../services/cloudflare.service';
+
+export const RESERVED_SLUGS = new Set([
+  'www', 'api', 'app', 'dash', 'dashboard', 'admin', 'phpmyadmin',
+  'mail', 'ftp', 'ssh', 'cloud', 'system', 'root', 'static', 'assets',
+  'cdn', 'multihosting', 'multi-hosting', 'status', 'health', 'landing',
+  'gateway', 'node', 'docker', 'db', 'mysql', 'postgres', 'mariadb'
+]);
+
+export function normalizeSlug(input: string): string {
+  return input
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+export function validateSlug(slug: string, excludeProjectId?: string): void {
+  const clean = normalizeSlug(slug);
+  if (!clean || clean.length < 2 || clean.length > 40) {
+    throw new Error('Subdomain/slug must be between 2 and 40 lowercase alphanumeric characters.');
+  }
+  if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(clean)) {
+    throw new Error('Subdomain/slug can only contain lowercase letters, numbers, and single hyphens.');
+  }
+  if (RESERVED_SLUGS.has(clean)) {
+    throw new Error(`The subdomain "${clean}" is reserved for platform infrastructure.`);
+  }
+
+  let query = 'SELECT id, name FROM projects WHERE slug = ? AND status != \'DELETED\'';
+  const params: any[] = [clean];
+  if (excludeProjectId) {
+    query += ' AND id != ?';
+    params.push(excludeProjectId);
+  }
+  const existing = db.prepare(query).get(...params) as any;
+  if (existing) {
+    throw new Error(`The subdomain/slug "${clean}" is already in use by project "${existing.name}". Please choose another unique name.`);
+  }
+}
+
+export function validateDomain(domain: string, excludeProjectId?: string): void {
+  const clean = domain.toLowerCase().trim();
+  if (!clean) return;
+
+  let query = 'SELECT id, name FROM projects WHERE (domain = ? OR slug = ?) AND status != \'DELETED\'';
+  const params: any[] = [clean, clean];
+  if (excludeProjectId) {
+    query += ' AND id != ?';
+    params.push(excludeProjectId);
+  }
+  const existing = db.prepare(query).get(...params) as any;
+  if (existing) {
+    throw new Error(`The domain "${clean}" is already assigned to project "${existing.name}".`);
+  }
+}
 
 const createProjectSchema = z.object({
   name: z.string().min(2).max(50),
+  slug: z.string().min(2).max(40).regex(/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/, 'Slug can only contain lowercase letters, numbers, and hyphens').optional(),
   runtimeType: z.enum(['STATIC', 'PHP']),
   template: z.string().optional(),
   createDatabase: z.boolean().optional(),
@@ -22,6 +80,7 @@ const createProjectSchema = z.object({
 
 const updateProjectSchema = z.object({
   name: z.string().min(2).max(50).optional(),
+  slug: z.string().min(2).max(40).regex(/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/, 'Slug can only contain lowercase letters, numbers, and hyphens').optional(),
   domain: z.string().nullable().optional(),
   documentRoot: z.string().optional()
 });
@@ -35,7 +94,51 @@ function resolveHost(req: AuthenticatedRequest): string {
   return config.serverIp;
 }
 
+function getSubdomainUrl(slug: string, domain?: string | null): string {
+  if (domain) {
+    return domain.startsWith('http') ? domain : `https://${domain}`;
+  }
+  return `https://${slug}.multi-hosting.com`;
+}
+
 export class ProjectsController {
+  public static async checkSlug(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const raw = String(req.query.slug || req.query.name || '');
+      const clean = normalizeSlug(raw);
+      const excludeId = req.query.excludeId ? String(req.query.excludeId) : undefined;
+      
+      if (!clean || clean.length < 2) {
+        res.json({ available: false, slug: clean, reason: 'Slug must be at least 2 characters' });
+        return;
+      }
+      if (clean.length > 40) {
+        res.json({ available: false, slug: clean, reason: 'Slug cannot exceed 40 characters' });
+        return;
+      }
+      if (RESERVED_SLUGS.has(clean)) {
+        res.json({ available: false, slug: clean, reason: `Subdomain "${clean}" is reserved by system` });
+        return;
+      }
+
+      let query = 'SELECT id, name FROM projects WHERE slug = ? AND status != \'DELETED\'';
+      const params: any[] = [clean];
+      if (excludeId) {
+        query += ' AND id != ?';
+        params.push(excludeId);
+      }
+      const existing = db.prepare(query).get(...params) as any;
+      if (existing) {
+        res.json({ available: false, slug: clean, reason: `Subdomain "${clean}" is already in use by "${existing.name}"` });
+        return;
+      }
+
+      res.json({ available: true, slug: clean, url: `https://${clean}.multi-hosting.com` });
+    } catch (err: any) {
+      res.status(400).json({ available: false, error: err.message });
+    }
+  }
+
   public static async list(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const user = req.user!;
@@ -68,6 +171,7 @@ export class ProjectsController {
         runtimeType: p.runtime_type,
         port: p.port,
         url: p.port ? `http://${host}:${p.port}` : null,
+        subdomainUrl: getSubdomainUrl(p.slug, p.domain),
         domain: p.domain,
         documentRoot: p.document_root,
         status: p.status,
@@ -122,6 +226,7 @@ export class ProjectsController {
           runtimeType: project.runtime_type,
           port: project.port,
           url: project.port ? `http://${host}:${project.port}` : null,
+          subdomainUrl: getSubdomainUrl(project.slug, project.domain),
           domain: project.domain,
           documentRoot: project.document_root,
           status: project.status,
@@ -145,7 +250,7 @@ export class ProjectsController {
       const id = String(req.params.id);
       const user = req.user!;
       const project = await ProjectsController.getAuthorizedProject(id, user);
-      const { name, domain, documentRoot } = updateProjectSchema.parse(req.body);
+      const { name, slug: newSlug, domain, documentRoot } = updateProjectSchema.parse(req.body);
 
       const updates: string[] = [];
       const params: any[] = [];
@@ -154,7 +259,13 @@ export class ProjectsController {
         updates.push('name = ?');
         params.push(name);
       }
+      if (newSlug !== undefined && newSlug !== project.slug) {
+        validateSlug(newSlug, id);
+        updates.push('slug = ?');
+        params.push(normalizeSlug(newSlug));
+      }
       if (domain !== undefined) {
+        if (domain) validateDomain(domain, id);
         updates.push('domain = ?');
         params.push(domain || null);
       }
@@ -174,14 +285,18 @@ export class ProjectsController {
 
       db.prepare(`UPDATE projects SET ${updates.join(', ')} WHERE id = ?`).run(...params);
 
-      // If document root was changed and project is running, re-provision container
-      if (documentRoot !== undefined && project.status === 'RUNNING' && project.port) {
-        const cleanDocRoot = documentRoot.trim() ? (documentRoot.startsWith('/') ? documentRoot : `/${documentRoot}`) : '/';
+      // If document root or slug was changed and project is running, re-provision container
+      if ((documentRoot !== undefined || newSlug !== undefined) && project.status === 'RUNNING' && project.port) {
+        const cleanDocRoot = documentRoot !== undefined
+          ? (documentRoot.trim() ? (documentRoot.startsWith('/') ? documentRoot : `/${documentRoot}`) : '/')
+          : project.document_root;
+        const activeSlug = newSlug ? normalizeSlug(newSlug) : project.slug;
+
         try {
           const containerInfo = await DockerService.provisionProjectContainer({
             id: project.id,
             name: name || project.name,
-            slug: project.slug,
+            slug: activeSlug,
             runtimeType: project.runtime_type,
             port: project.port,
             documentRoot: cleanDocRoot
@@ -193,7 +308,7 @@ export class ProjectsController {
             WHERE id = ?
           `).run(containerInfo.containerId, containerInfo.containerName, id);
         } catch (containerErr: any) {
-          console.error('Failed to re-provision container on doc root update:', containerErr);
+          console.error('Failed to re-provision container on update:', containerErr);
         }
       }
 
@@ -203,7 +318,7 @@ export class ProjectsController {
         action: 'PROJECT_UPDATED',
         resourceType: 'PROJECT',
         resourceId: id,
-        details: { name, domain, documentRoot }
+        details: { name, slug: newSlug, domain, documentRoot }
       });
 
       res.json({ message: 'Project updated successfully' });
@@ -220,6 +335,7 @@ export class ProjectsController {
     try {
       const {
         name,
+        slug: customSlug,
         runtimeType,
         template,
         createDatabase,
@@ -228,9 +344,31 @@ export class ProjectsController {
         domain
       } = createProjectSchema.parse(req.body);
 
-      const baseSlug = name.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').substring(0, 24);
-      const randSuffix = crypto.randomBytes(2).toString('hex');
-      const slug = `${baseSlug}-${randSuffix}`;
+      // Validate or generate slug
+      let slug: string;
+      if (customSlug) {
+        validateSlug(customSlug);
+        slug = normalizeSlug(customSlug);
+      } else {
+        const baseSlug = normalizeSlug(name).substring(0, 30) || 'app';
+        if (!RESERVED_SLUGS.has(baseSlug)) {
+          const existing = db.prepare('SELECT id FROM projects WHERE slug = ? AND status != \'DELETED\'').get(baseSlug);
+          if (!existing) {
+            slug = baseSlug;
+          } else {
+            const randSuffix = crypto.randomBytes(2).toString('hex');
+            slug = `${baseSlug}-${randSuffix}`;
+          }
+        } else {
+          const randSuffix = crypto.randomBytes(2).toString('hex');
+          slug = `${baseSlug}-${randSuffix}`;
+        }
+      }
+
+      // Validate custom domain if specified
+      if (domain) {
+        validateDomain(domain);
+      }
 
       // 1. Insert initial project record with status PROVISIONING
       db.prepare(`
@@ -286,6 +424,9 @@ export class ProjectsController {
         `).run(containerErr.message, projectId);
       }
 
+      // 6. Attempt Cloudflare automated DNS CNAME sync if configured
+      CloudflareService.autoPublishSubdomain(slug).catch(() => {});
+
       AuditService.log({
         userId: user.userId,
         username: user.username,
@@ -306,6 +447,7 @@ export class ProjectsController {
           runtimeType,
           port: allocatedPort,
           url: `http://${host}:${allocatedPort}`,
+          subdomainUrl: getSubdomainUrl(slug, domain),
           status: containerInfo ? 'RUNNING' : 'FAILED',
           hasDatabase: Boolean(createDatabase),
           database: dbCredentials
@@ -328,37 +470,20 @@ export class ProjectsController {
 
       const containerName = project.container_name || `mh_site_${project.slug}`;
       
-      let port = project.port;
-      if (!port) {
-        port = await PortService.allocatePort(id);
-        db.prepare('UPDATE projects SET port = ? WHERE id = ?').run(port, id);
-      }
-
-      let containerId = project.container_id;
-      let newContainerName = containerName;
-
-      try {
-        await DockerService.startContainer(containerName);
-      } catch (startErr: any) {
-        // If container does not exist or failed to start, re-provision it seamlessly!
-        const containerInfo = await DockerService.provisionProjectContainer({
+      let containerInfo = await DockerService.startContainer(containerName).catch(async () => {
+        return await DockerService.provisionProjectContainer({
           id: project.id,
           name: project.name,
           slug: project.slug,
           runtimeType: project.runtime_type,
-          port: port,
+          port: project.port,
           documentRoot: project.document_root
         });
-        containerId = containerInfo.containerId;
-        newContainerName = containerInfo.containerName;
-        port = containerInfo.port;
-      }
+      });
 
       db.prepare(`
-        UPDATE projects 
-        SET status = 'RUNNING', port = ?, container_id = ?, container_name = ?, error_message = NULL, updated_at = datetime('now') 
-        WHERE id = ?
-      `).run(port, containerId, newContainerName, id);
+        UPDATE projects SET status = 'RUNNING', error_message = NULL, updated_at = datetime('now') WHERE id = ?
+      `).run(id);
 
       AuditService.log({
         userId: req.user!.userId,
@@ -368,9 +493,10 @@ export class ProjectsController {
         resourceId: id
       });
 
-      res.json({ message: 'Project started successfully', status: 'RUNNING' });
+      res.json({ message: 'Project started successfully' });
     } catch (err: any) {
-      res.status(400).json({ error: err.message });
+      db.prepare(`UPDATE projects SET status = 'FAILED', error_message = ? WHERE id = ?`).run(err.message, req.params.id);
+      res.status(500).json({ error: err.message });
     }
   }
 
@@ -380,9 +506,11 @@ export class ProjectsController {
       const project = await ProjectsController.getAuthorizedProject(id, req.user!);
 
       const containerName = project.container_name || `mh_site_${project.slug}`;
-      await DockerService.stopContainer(containerName).catch(() => {});
+      await DockerService.stopContainer(containerName);
 
-      db.prepare("UPDATE projects SET status = 'STOPPED', updated_at = datetime('now') WHERE id = ?").run(id);
+      db.prepare(`
+        UPDATE projects SET status = 'STOPPED', updated_at = datetime('now') WHERE id = ?
+      `).run(id);
 
       AuditService.log({
         userId: req.user!.userId,
@@ -392,9 +520,9 @@ export class ProjectsController {
         resourceId: id
       });
 
-      res.json({ message: 'Project stopped successfully', status: 'STOPPED' });
+      res.json({ message: 'Project stopped successfully' });
     } catch (err: any) {
-      res.status(400).json({ error: err.message });
+      res.status(500).json({ error: err.message });
     }
   }
 
@@ -403,26 +531,21 @@ export class ProjectsController {
       const id = String(req.params.id);
       const project = await ProjectsController.getAuthorizedProject(id, req.user!);
 
-      let port = project.port;
-      if (!port) {
-        port = await PortService.allocatePort(id);
-        db.prepare('UPDATE projects SET port = ? WHERE id = ?').run(port, id);
-      }
-
-      const containerInfo = await DockerService.provisionProjectContainer({
-        id: project.id,
-        name: project.name,
-        slug: project.slug,
-        runtimeType: project.runtime_type,
-        port: port,
-        documentRoot: project.document_root
+      const containerName = project.container_name || `mh_site_${project.slug}`;
+      await DockerService.restartContainer(containerName).catch(async () => {
+        return await DockerService.provisionProjectContainer({
+          id: project.id,
+          name: project.name,
+          slug: project.slug,
+          runtimeType: project.runtime_type,
+          port: project.port,
+          documentRoot: project.document_root
+        });
       });
 
       db.prepare(`
-        UPDATE projects 
-        SET status = 'RUNNING', port = ?, container_id = ?, container_name = ?, error_message = NULL, last_deployed_at = datetime('now'), updated_at = datetime('now')
-        WHERE id = ?
-      `).run(containerInfo.port, containerInfo.containerId, containerInfo.containerName, id);
+        UPDATE projects SET status = 'RUNNING', error_message = NULL, updated_at = datetime('now') WHERE id = ?
+      `).run(id);
 
       AuditService.log({
         userId: req.user!.userId,
@@ -432,9 +555,9 @@ export class ProjectsController {
         resourceId: id
       });
 
-      res.json({ message: 'Project container restarted and refreshed', status: 'RUNNING' });
+      res.json({ message: 'Project restarted successfully' });
     } catch (err: any) {
-      res.status(400).json({ error: err.message });
+      res.status(500).json({ error: err.message });
     }
   }
 
@@ -443,18 +566,27 @@ export class ProjectsController {
       const id = String(req.params.id);
       const project = await ProjectsController.getAuthorizedProject(id, req.user!);
 
+      // 1. Stop and remove container
       const containerName = project.container_name || `mh_site_${project.slug}`;
       await DockerService.removeContainer(containerName).catch(() => {});
 
-      await DatabaseService.deleteDatabase(id).catch(() => {});
-
+      // 2. Release allocated port
       if (project.port) {
         await PortService.releasePort(project.port, id);
       }
 
-      await FileService.deletePath(id, '').catch(() => {});
+      // 3. Optionally clean database
+      await DatabaseService.deleteDatabase(id).catch(() => {});
 
-      db.prepare("UPDATE projects SET status = 'DELETED', port = NULL, updated_at = datetime('now') WHERE id = ?").run(id);
+      // 4. Delete filesystem directory
+      await FileService.deleteProjectDirectory(id).catch(() => {});
+
+      // 5. Optionally remove Cloudflare DNS CNAME record
+      CloudflareService.removeSubdomain(project.slug).catch(() => {});
+
+      // 6. Delete database records
+      db.prepare('DELETE FROM deployments WHERE project_id = ?').run(id);
+      db.prepare('DELETE FROM projects WHERE id = ?').run(id);
 
       AuditService.log({
         userId: req.user!.userId,
@@ -465,21 +597,7 @@ export class ProjectsController {
         details: { name: project.name, slug: project.slug, port: project.port }
       });
 
-      res.json({ message: 'Project deleted and resources cleanly released.' });
-    } catch (err: any) {
-      res.status(400).json({ error: err.message });
-    }
-  }
-
-  public static async getLogs(req: AuthenticatedRequest, res: Response): Promise<void> {
-    try {
-      const id = String(req.params.id);
-      const project = await ProjectsController.getAuthorizedProject(id, req.user!);
-
-      const containerName = project.container_name || `mh_site_${project.slug}`;
-      const logs = await DockerService.getContainerLogs(containerName);
-
-      res.json({ logs });
+      res.json({ message: 'Project and all associated containers, ports, and storage destroyed successfully.' });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -490,15 +608,34 @@ export class ProjectsController {
       const id = String(req.params.id);
       const project = await ProjectsController.getAuthorizedProject(id, req.user!);
 
-      const containerName = project.container_name || `mh_site_${project.slug}`;
-      const stats = await DockerService.getContainerStats(containerName);
-      const storageBytes = await FileService.getStorageUsage(id);
+      let stats = null;
+      if (project.status === 'RUNNING') {
+        const containerName = project.container_name || `mh_site_${project.slug}`;
+        stats = await DockerService.getContainerStats(containerName);
+      }
+
+      const storageBytes = FileService.getDirectorySize(FileService.getProjectRoot(id));
+      const storageMb = storageBytes / (1024 * 1024);
 
       res.json({
         stats,
         storageBytes,
-        storageMb: Math.round((storageBytes / 1024 / 1024) * 100) / 100
+        storageMb: Math.round(storageMb * 100) / 100
       });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+
+  public static async getLogs(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const id = String(req.params.id);
+      const project = await ProjectsController.getAuthorizedProject(id, req.user!);
+
+      const containerName = project.container_name || `mh_site_${project.slug}`;
+      const logs = await DockerService.getContainerLogs(containerName, 150);
+
+      res.json({ logs });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
@@ -507,10 +644,10 @@ export class ProjectsController {
   private static async getAuthorizedProject(id: string, user: { userId: string; role: string }): Promise<any> {
     const project = db.prepare('SELECT * FROM projects WHERE id = ? AND status != \'DELETED\'').get(id) as any;
     if (!project) {
-      throw new Error('Project not found or already deleted');
+      throw new Error('Project not found');
     }
     if (user.role !== 'ADMIN' && project.owner_id !== user.userId) {
-      throw new Error('Access denied: You do not have permission to manage this project');
+      throw new Error('Access denied to this project');
     }
     return project;
   }

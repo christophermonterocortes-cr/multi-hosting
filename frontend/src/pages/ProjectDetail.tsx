@@ -14,14 +14,16 @@ import {
   ArrowLeft,
   HardDrive,
   Cpu,
-  Server
+  Server,
+  Copy,
+  Check
 } from 'lucide-react';
 import { api } from '../services/api';
 import { Project, ContainerStats } from '../types';
 import { FileManager } from '../components/FileManager';
 import { DatabaseCard } from '../components/DatabaseCard';
 import { LogViewer } from '../components/LogViewer';
-import { getProjectUrl } from '../utils/url';
+import { getProjectEndpoints } from '../utils/url';
 import { useLanguage } from '../context/LanguageContext';
 
 export const ProjectDetail: React.FC = () => {
@@ -38,7 +40,17 @@ export const ProjectDetail: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const liveUrl = project ? getProjectUrl(project) : '';
+  const endpoints = project ? getProjectEndpoints(project) : null;
+  const lanUrl = endpoints?.lanUrl || null;
+  const publicUrl = endpoints?.publicUrl || null;
+  const [copiedType, setCopiedType] = useState<'lan' | 'public' | null>(null);
+
+  const handleCopy = (text: string, type: 'lan' | 'public') => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedType(type);
+    setTimeout(() => setCopiedType(null), 2000);
+  };
 
   // Settings tab form state
   const [editName, setEditName] = useState('');
@@ -195,16 +207,30 @@ export const ProjectDetail: React.FC = () => {
           </div>
 
           {/* Breakers and Actuators */}
-          <div className="flex items-center gap-2">
-            {liveUrl && liveUrl !== '#' && (
+          <div className="flex items-center gap-2 flex-wrap">
+            {publicUrl && (
               <a
-                href={liveUrl}
+                href={publicUrl}
                 target="_blank"
                 rel="noreferrer"
                 className="btn-rack btn-rack-primary flex items-center gap-1.5"
+                title="Launch Cloudflare Public Endpoint"
               >
-                <ExternalLink className="h-3.5 w-3.5" />
-                <span>OPEN LAN SITE</span>
+                <Globe className="h-3.5 w-3.5" />
+                <span>OPEN CLOUDFLARE URL</span>
+              </a>
+            )}
+
+            {lanUrl && (
+              <a
+                href={lanUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="btn-rack flex items-center gap-1.5"
+                title="Launch Direct LAN Socket"
+              >
+                <ExternalLink className="h-3.5 w-3.5 text-signal-amber" />
+                <span>OPEN LAN URL</span>
               </a>
             )}
 
@@ -313,15 +339,59 @@ export const ProjectDetail: React.FC = () => {
           {/* Unit Socket Bus Details */}
           <div className="rack-blade p-4 border-rack-border bg-rack-panel space-y-3">
             <h3 className="font-display font-bold text-xs uppercase tracking-wider text-trace-silver">
-              [ UNIT SOCKET & ROUTING BUS ]
+              [ UNIT ROUTING ENDPOINTS & SOCKET MATRIX ]
             </h3>
-            <div className="space-y-2 text-[11px]">
-              <div className="flex flex-wrap items-center justify-between border-b border-rack-border/60 pb-2">
-                <span className="text-trace-dim">LAN PUBLIC SOCKET URL:</span>
-                <a href={liveUrl || '#'} target="_blank" rel="noreferrer" className="text-signal-amber font-bold hover:underline">
-                  {liveUrl || 'UNBOUND'}
-                </a>
+            <div className="space-y-2.5 text-[11px]">
+              {/* Cloudflare Public URL */}
+              <div className="flex flex-wrap items-center justify-between border-b border-rack-border/60 pb-2 gap-2">
+                <span className="text-trace-dim flex items-center gap-1 font-bold text-signal-amber">
+                  <span>🌐 CLOUDFLARE PUBLIC URL:</span>
+                </span>
+                <div className="flex items-center gap-2">
+                  {publicUrl ? (
+                    <>
+                      <a href={publicUrl} target="_blank" rel="noreferrer" className="text-signal-amber font-bold hover:underline">
+                        {publicUrl}
+                      </a>
+                      <button
+                        onClick={() => handleCopy(publicUrl, 'public')}
+                        className="btn-rack text-[10px] px-1.5 py-0.5"
+                        title="Copy Public URL"
+                      >
+                        {copiedType === 'public' ? 'COPIED' : 'COPY'}
+                      </button>
+                    </>
+                  ) : (
+                    <span className="text-trace-subtle">N/A</span>
+                  )}
+                </div>
               </div>
+
+              {/* Direct LAN Socket */}
+              <div className="flex flex-wrap items-center justify-between border-b border-rack-border/60 pb-2 gap-2">
+                <span className="text-trace-dim flex items-center gap-1 font-bold text-trace-silver">
+                  <span>⚡ LAN DIRECT SOCKET:</span>
+                </span>
+                <div className="flex items-center gap-2">
+                  {lanUrl ? (
+                    <>
+                      <a href={lanUrl} target="_blank" rel="noreferrer" className="text-trace-silver hover:text-signal-amber hover:underline font-mono">
+                        {lanUrl}
+                      </a>
+                      <button
+                        onClick={() => handleCopy(lanUrl, 'lan')}
+                        className="btn-rack text-[10px] px-1.5 py-0.5"
+                        title="Copy LAN URL"
+                      >
+                        {copiedType === 'lan' ? 'COPIED' : 'COPY'}
+                      </button>
+                    </>
+                  ) : (
+                    <span className="text-trace-subtle">UNBOUND</span>
+                  )}
+                </div>
+              </div>
+
               <div className="flex flex-wrap items-center justify-between border-b border-rack-border/60 pb-2">
                 <span className="text-trace-dim">DOCUMENT ROOT WEBPATH:</span>
                 <span className="text-trace-silver font-bold">{project.documentRoot}</span>

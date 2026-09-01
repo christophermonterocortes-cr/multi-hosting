@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
+import { LanguageProvider } from './context/LanguageContext';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
 import { ProjectModal } from './components/ProjectModal';
@@ -18,6 +19,7 @@ import { Settings } from './pages/Settings';
 import { Login } from './pages/Login';
 import { Register } from './pages/Register';
 import { NotFound } from './pages/NotFound';
+import { LandingPage } from './pages/LandingPage';
 
 const ProtectedLayout: React.FC = () => {
   const { isAuthenticated, loading } = useAuth();
@@ -26,10 +28,10 @@ const ProtectedLayout: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-slate-950 text-white font-mono text-sm">
+      <div className="flex h-screen w-screen items-center justify-center bg-rack-bg text-trace-silver font-mono text-sm">
         <div className="flex items-center gap-3">
-          <span className="h-5 w-5 border-2 border-brand-500 border-t-transparent rounded-full animate-spin"></span>
-          <span>Loading Multi Hosting...</span>
+          <span className="h-4 w-4 border-2 border-signal-amber border-t-transparent rounded-full animate-spin"></span>
+          <span>INITIALIZING SWITCHBOARD...</span>
         </div>
       </div>
     );
@@ -40,7 +42,7 @@ const ProtectedLayout: React.FC = () => {
   }
 
   return (
-    <div className="flex h-screen flex-col bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 antialiased overflow-x-hidden">
+    <div className="flex h-screen flex-col bg-rack-bg text-trace-silver antialiased overflow-x-hidden font-mono">
       <Navbar 
         onNewProject={() => setModalOpen(true)} 
         onToggleMobile={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -55,13 +57,11 @@ const ProtectedLayout: React.FC = () => {
         {/* Mobile Slide-over Drawer & Backdrop */}
         {mobileMenuOpen && (
           <div className="fixed inset-0 z-40 lg:hidden flex">
-            {/* Backdrop overlay */}
             <div 
-              className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs transition-opacity animate-fade-in"
+              className="fixed inset-0 bg-black/75 backdrop-blur-xs transition-opacity animate-fade-in"
               onClick={() => setMobileMenuOpen(false)}
             />
-            {/* Sliding Drawer */}
-            <div className="relative flex-1 flex flex-col max-w-xs w-full bg-white dark:bg-slate-925 shadow-2xl z-50 animate-fade-in">
+            <div className="relative flex-1 flex flex-col max-w-xs w-full bg-rack-panel border-r border-rack-border shadow-2xl z-50 animate-fade-in">
               <Sidebar 
                 onNewProject={() => setModalOpen(true)} 
                 onCloseMobile={() => setMobileMenuOpen(false)}
@@ -95,7 +95,14 @@ const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   return <>{children}</>;
 };
 
-import { LanguageProvider } from './context/LanguageContext';
+// Root Switcher: Serves Landing Page on apex domain multi-hosting.com
+const RootSwitcher: React.FC = () => {
+  const isApexDomain = typeof window !== 'undefined' && window.location.hostname === 'multi-hosting.com';
+  if (isApexDomain) {
+    return <LandingPage />;
+  }
+  return <Dashboard />;
+};
 
 export const App: React.FC = () => {
   return (
@@ -104,11 +111,13 @@ export const App: React.FC = () => {
         <AuthProvider>
           <BrowserRouter>
             <Routes>
+              {/* Public Landing Page */}
+              <Route path="/landing" element={<LandingPage />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
               
               <Route element={<ProtectedLayout />}>
-                <Route path="/" element={<Dashboard />} />
+                <Route path="/" element={<RootSwitcher />} />
                 <Route path="/projects" element={<Projects />} />
                 <Route path="/projects/:id" element={<ProjectDetail />} />
                 <Route path="/ports" element={<PortManager />} />

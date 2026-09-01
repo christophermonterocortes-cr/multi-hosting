@@ -12,7 +12,7 @@ services:
       - NODE_ENV=production
       - PORT=5000
       - HOST=0.0.0.0
-      - SERVER_IP=${SERVER_IP:-127.0.0.1}
+      - SERVER_IP=${SERVER_IP:-192.168.0.245}
       - JWT_SECRET=${JWT_SECRET:-multi_hosting_super_secret_jwt_key_32bytes_min!}
       - JWT_EXPIRES_IN=7d
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:-multi_hosting_aes_256_encryption_key_32_bytes!}

@@ -13,7 +13,7 @@ import {
   Check
 } from 'lucide-react';
 import { Project } from '../types';
-import { getProjectUrl } from '../utils/url';
+import { getProjectEndpoints } from '../utils/url';
 import { useLanguage } from '../context/LanguageContext';
 
 interface ProjectCardProps {
@@ -32,17 +32,15 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
   onDelete
 }) => {
   const navigate = useNavigate();
-  const { t } = useLanguage();
-  const [copied, setCopied] = useState(false);
+  const { lanUrl, publicUrl } = getProjectEndpoints(project);
+  const [copiedType, setCopiedType] = useState<'lan' | 'public' | null>(null);
 
-  const liveUrl = getProjectUrl(project);
-
-  const handleCopyUrl = (e: React.MouseEvent) => {
+  const handleCopy = (e: React.MouseEvent, text: string, type: 'lan' | 'public') => {
     e.stopPropagation();
-    if (!liveUrl || liveUrl === '#') return;
-    navigator.clipboard.writeText(liveUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedType(type);
+    setTimeout(() => setCopiedType(null), 2000);
   };
 
   const isRunning = project.status === 'RUNNING';
@@ -82,39 +80,70 @@ export const ProjectCard: React.FC<ProjectCardProps> = ({
           </div>
         </div>
 
-        {/* Port & Routing Bus Strip */}
-        <div className="mt-3 bg-rack-bg border border-rack-border p-2.5 space-y-1.5 text-[11px]">
-          <div className="flex items-center justify-between">
-            <span className="text-trace-dim">SOCKET PORT:</span>
-            <span className="font-bold text-signal-amber font-mono">
-              {project.port ? `:${project.port}` : 'UNBOUND'}
-            </span>
+        {/* Dual Routing Bus: Public Cloudflare + Direct LAN */}
+        <div className="mt-3 bg-rack-bg border border-rack-border p-2.5 space-y-2 text-[11px]">
+          {/* Public Cloudflare Endpoint */}
+          <div className="space-y-0.5">
+            <div className="flex items-center justify-between text-[10px] text-trace-dim">
+              <span className="flex items-center gap-1 font-bold text-signal-amber">
+                <span>🌐 CLOUDFLARE ENDPOINT</span>
+              </span>
+              <span className="text-trace-subtle">HTTPS</span>
+            </div>
+            <div className="flex items-center justify-between gap-1 bg-rack-panel border border-rack-border/60 px-2 py-1">
+              <a
+                href={publicUrl || '#'}
+                target="_blank"
+                rel="noreferrer"
+                className="text-trace-silver hover:text-signal-amber hover:underline truncate font-bold text-[11px]"
+                title={publicUrl || ''}
+              >
+                {publicUrl || 'N/A'}
+              </a>
+              {publicUrl && (
+                <button
+                  onClick={(e) => handleCopy(e, publicUrl, 'public')}
+                  className="text-trace-dim hover:text-signal-amber p-0.5 shrink-0"
+                  title="Copy Public URL"
+                >
+                  {copiedType === 'public' ? <Check className="h-3 w-3 text-signal-amber" /> : <Copy className="h-3 w-3" />}
+                </button>
+              )}
+            </div>
           </div>
 
-          <div className="flex items-center justify-between">
-            <span className="text-trace-dim">LAN ADDR:</span>
-            {project.port ? (
-              <div className="flex items-center gap-1.5 min-w-0">
-                <a
-                  href={liveUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="font-bold text-trace-silver hover:text-signal-amber hover:underline truncate max-w-[150px]"
-                >
-                  {liveUrl}
-                </a>
-                <button
-                  onClick={handleCopyUrl}
-                  className="text-trace-dim hover:text-signal-amber"
-                  title="Copy LAN Address"
-                  aria-label="Copy LAN Address"
-                >
-                  {copied ? <Check className="h-3 w-3 text-signal-amber" /> : <Copy className="h-3 w-3" />}
-                </button>
-              </div>
-            ) : (
-              <span className="text-trace-subtle">N/A</span>
-            )}
+          {/* Direct LAN Socket */}
+          <div className="space-y-0.5 pt-1 border-t border-rack-border/40">
+            <div className="flex items-center justify-between text-[10px] text-trace-dim">
+              <span className="font-bold text-trace-silver">⚡ LAN SOCKET</span>
+              <span className="text-signal-amber font-mono font-bold">
+                {project.port ? `:${project.port}` : 'UNBOUND'}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-1 bg-rack-panel border border-rack-border/60 px-2 py-1">
+              {lanUrl ? (
+                <>
+                  <a
+                    href={lanUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-trace-dim hover:text-signal-amber hover:underline truncate text-[11px]"
+                    title={lanUrl}
+                  >
+                    {lanUrl}
+                  </a>
+                  <button
+                    onClick={(e) => handleCopy(e, lanUrl, 'lan')}
+                    className="text-trace-dim hover:text-signal-amber p-0.5 shrink-0"
+                    title="Copy LAN Address"
+                  >
+                    {copiedType === 'lan' ? <Check className="h-3 w-3 text-signal-amber" /> : <Copy className="h-3 w-3" />}
+                  </button>
+                </>
+              ) : (
+                <span className="text-trace-subtle text-[10px]">CONTAINER OFFLINE</span>
+              )}
+            </div>
           </div>
 
           {project.hasDatabase && (
