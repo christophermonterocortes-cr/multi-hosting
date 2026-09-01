@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-import { Server, LogOut, Shield, Menu, Terminal, HardDrive } from 'lucide-react';
+import { Server, LogOut, Shield, Menu, Terminal, HardDrive, Globe } from 'lucide-react';
 
 interface NavbarProps {
   onNewProject?: () => void;
@@ -57,15 +57,18 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleMobile }) => {
 
       {/* Right Hardware Actions */}
       <div className="flex items-center gap-2 sm:gap-3">
-        {/* Language Switcher */}
+        {/* Language Switcher Button */}
         <button
+          type="button"
           onClick={toggleLanguage}
-          className="btn-rack flex items-center gap-1.5"
-          title={language === 'en' ? 'Cambiar a Español' : 'Switch to English'}
-          aria-label="Toggle language"
+          className="btn-rack flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono font-bold"
+          title={language === 'en' ? 'Cambiar a Español (ES)' : 'Switch to English (EN)'}
+          aria-label="Toggle interface language"
         >
-          <span className="text-xs">{language === 'en' ? 'EN' : 'ES'}</span>
-          <span className="text-signal-amber">[{language.toUpperCase()}]</span>
+          <Globe className="h-3.5 w-3.5 text-signal-amber" />
+          <span className={language === 'en' ? 'text-signal-amber underline font-black' : 'text-trace-dim'}>EN</span>
+          <span className="text-rack-border">/</span>
+          <span className={language === 'es' ? 'text-signal-amber underline font-black' : 'text-trace-dim'}>ES</span>
         </button>
 
         {/* User Status and Break Switch */}

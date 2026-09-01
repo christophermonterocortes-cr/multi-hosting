@@ -115,17 +115,27 @@ export class DockerService {
     if (!hasCustom) {
       if (project.runtimeType === 'STATIC') {
         try {
-          const staticDir = path.join(config.hostRuntimesDir, 'static');
+          const staticDir = fs.existsSync(path.join(config.runtimesDir, 'static'))
+            ? path.join(config.runtimesDir, 'static')
+            : path.join(config.hostRuntimesDir, 'static');
           await this.runDocker(['build', '-t', runtimeImage, staticDir], 180000);
-        } catch {
+        } catch (e: any) {
+          console.warn('Failed to build custom static image, falling back to nginx:alpine:', e.message);
           runtimeImage = 'nginx:alpine';
         }
       } else {
         try {
-          const phpDir = path.join(config.hostRuntimesDir, 'php');
+          const phpDir = fs.existsSync(path.join(config.runtimesDir, 'php'))
+            ? path.join(config.runtimesDir, 'php')
+            : path.join(config.hostRuntimesDir, 'php');
           await this.runDocker(['build', '-t', runtimeImage, phpDir], 300000);
         } catch (e: any) {
-          console.error('Failed to build PHP runtime image:', e.message);
+          console.warn('Failed to build custom PHP image, checking image availability:', e.message);
+          const hasBasePhp = await this.imageExists('php:8.2-apache');
+          if (!hasBasePhp) {
+            await this.runDocker(['pull', 'php:8.2-apache']).catch(() => {});
+          }
+          runtimeImage = 'php:8.2-apache';
         }
       }
     }

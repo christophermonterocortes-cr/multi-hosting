@@ -470,7 +470,7 @@ export class ProjectsController {
 
       const containerName = project.container_name || `mh_site_${project.slug}`;
       
-      let containerInfo = await DockerService.startContainer(containerName).catch(async () => {
+      const containerInfo: any = await DockerService.startContainer(containerName).catch(async () => {
         return await DockerService.provisionProjectContainer({
           id: project.id,
           name: project.name,
@@ -481,9 +481,15 @@ export class ProjectsController {
         });
       });
 
-      db.prepare(`
-        UPDATE projects SET status = 'RUNNING', error_message = NULL, updated_at = datetime('now') WHERE id = ?
-      `).run(id);
+      if (containerInfo && typeof containerInfo === 'object' && containerInfo.containerId) {
+        db.prepare(`
+          UPDATE projects SET status = 'RUNNING', port = ?, container_id = ?, container_name = ?, error_message = NULL, updated_at = datetime('now') WHERE id = ?
+        `).run(containerInfo.port || project.port, containerInfo.containerId, containerInfo.containerName || containerName, id);
+      } else {
+        db.prepare(`
+          UPDATE projects SET status = 'RUNNING', error_message = NULL, updated_at = datetime('now') WHERE id = ?
+        `).run(id);
+      }
 
       AuditService.log({
         userId: req.user!.userId,
@@ -532,7 +538,7 @@ export class ProjectsController {
       const project = await ProjectsController.getAuthorizedProject(id, req.user!);
 
       const containerName = project.container_name || `mh_site_${project.slug}`;
-      await DockerService.restartContainer(containerName).catch(async () => {
+      const containerInfo: any = await DockerService.restartContainer(containerName).catch(async () => {
         return await DockerService.provisionProjectContainer({
           id: project.id,
           name: project.name,
@@ -543,9 +549,15 @@ export class ProjectsController {
         });
       });
 
-      db.prepare(`
-        UPDATE projects SET status = 'RUNNING', error_message = NULL, updated_at = datetime('now') WHERE id = ?
-      `).run(id);
+      if (containerInfo && typeof containerInfo === 'object' && containerInfo.containerId) {
+        db.prepare(`
+          UPDATE projects SET status = 'RUNNING', port = ?, container_id = ?, container_name = ?, error_message = NULL, updated_at = datetime('now') WHERE id = ?
+        `).run(containerInfo.port || project.port, containerInfo.containerId, containerInfo.containerName || containerName, id);
+      } else {
+        db.prepare(`
+          UPDATE projects SET status = 'RUNNING', error_message = NULL, updated_at = datetime('now') WHERE id = ?
+        `).run(id);
+      }
 
       AuditService.log({
         userId: req.user!.userId,
